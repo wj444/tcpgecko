@@ -15,6 +15,16 @@ struct pygecko_bss_t {
 	unsigned char stack[0x8000];
 };
 
+unsigned char *memcpy_buffer[0x400] __attribute__((section(".data")));
+
+void pygecko_memcpy(unsigned char *dst, unsigned char *src, unsigned int len) {
+	if(len>0x400) return;
+	memcpy(memcpy_buffer, src, len);
+	SC0x25_KernelCopyData((unsigned int)OSEffectiveToPhysical(dst), (unsigned int)&memcpy_buffer, len);
+	DCFlushRange(dst, len);
+	return;
+}
+
 
 #define CHECK_ERROR(cond) if (cond) { bss->line = __LINE__; goto error; }
 #define errno (*__gh_errno_ptr())
@@ -110,13 +120,13 @@ static int rungecko(struct pygecko_bss_t *bss, int clientfd) {
 			break;
 		}
 		case 0x03: { /* cmd_pokemem */
-			int *ptr;
+			int dst, value;
 			ret = recvwait(bss, clientfd, buffer, 8);
 			CHECK_ERROR(ret < 0);
 
-			ptr = ((int **)buffer)[0];
-			*ptr = ((int *)buffer)[1];
-			DCFlushRange(ptr, 4);
+			dst = ((int *)buffer)[0];
+			value = ((int *)buffer)[1];
+			pygecko_memcpy((unsigned char*)dst, (unsigned char*)&value, 4);
 			break;
 		}
 		case 0x04: { /* cmd_readmem */
@@ -197,7 +207,7 @@ static int rungecko(struct pygecko_bss_t *bss, int clientfd) {
 				ret = recvwait(bss, clientfd, dst, len);
 				CHECK_ERROR(ret < 0);
 				if (dst == buffer) {
-					memcpy(ptr, buffer, len);
+					pygecko_memcpy(ptr, buffer, len);
 				}
 
 				ptr += len;
