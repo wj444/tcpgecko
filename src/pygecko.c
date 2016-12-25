@@ -386,6 +386,7 @@ error:
     	if (sockfd != -1)
        			socketclose(sockfd);
      	bss->error = ret;
+     	GX2WaitForVsync();
    
 	}
 	return 0;
